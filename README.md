@@ -14,13 +14,16 @@ Requirements
 ============
 
 * Qt >= 5.1
+* clang (for build)
+* make (for build)
 
 Build and install
 =================
 
 ```
+qmake
 make
-make DESTDIR=... install
+make INSTALL_ROOT=... install
 ```
 
 License
