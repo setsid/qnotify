@@ -19,14 +19,16 @@
 
 #include <QtGui>
 #include <QtWidgets>
+
+#include <pwd.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#include <unistd.h>
 
 #define WIDTH (300)  // window width
 #define HEIGHT (100)  // window height
 #define TIMEOUT (10)  // how many seconds to show the window
-
 
 class CustomLabel: public QLabel
 {
@@ -38,7 +40,6 @@ protected:
             QLabel::mouseReleaseEvent(event);
     }
 };
-
 
 class NotifyWindow: public QMainWindow
 {
@@ -84,17 +85,68 @@ protected:
      }
 };
 
+/* Check DISPLAY variable and set it if needed. */
+static int set_display_variable(void)
+{
+    const char *value = getenv("DISPLAY");
+
+    if (value != nullptr && *value != '\0')
+        return 0;
+
+    const int ret = setenv("DISPLAY", ":0.0", 1);
+
+    if (ret)
+        fprintf(stderr, "setenv(DISPLAY): error '%m'\n");
+
+    return ret;
+}
+
+/* Check XAUTHORITY variable and set it if needed. */
+static int set_xauthority_variable(void)
+{
+    const char *value = getenv("XAUTHORITY");
+
+    if (value != nullptr && !access(value, R_OK))
+        return 0;
+
+    const uid_t uid = getuid();
+
+    const struct passwd *const user = getpwuid(uid);
+
+    if (user == nullptr) {
+        fprintf(stderr, "getpwuid(%u): error '%m'\n", uid);
+        return 1;
+    }
+
+    char file_path[128];
+
+    snprintf(file_path, sizeof(file_path), "%s/.Xauthority", user->pw_dir);
+
+    if (access(file_path, R_OK)) {
+        fprintf(stderr, "access('%s'): error '%m'\n", file_path);
+        return 1;
+    }
+
+    const int ret = setenv("XAUTHORITY", file_path, 1);
+
+    if (ret)
+        fprintf(stderr, "setenv(XAUTHORITY): error '%m'\n");
+
+    return ret;
+}
 
 int main(int argc, char** argv)
 {
     if (argc != 2) {
-        qCritical("Usage: qnotify <message>");
+        fprintf(stderr, "Usage: qnotify <message>\n");
         return EXIT_FAILURE;
     }
 
-    const char *display = getenv("DISPLAY");
-    if (display == nullptr || !strlen(display))
-        setenv("DISPLAY", ":0", 1);
+    if (set_display_variable())
+        return EXIT_FAILURE;
+
+    if (set_xauthority_variable())
+        return EXIT_FAILURE;
 
     QApplication app(argc, argv);
 
